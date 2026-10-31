@@ -178,3 +178,4 @@ jobs:
           tags: |
             ghcr.io/satorovramazonbek/postgrestest:latest
             ghcr.io/satorovramazonbek/postgrestest:v1.0.${{ github.run_number }}
+
