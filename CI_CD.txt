@@ -1,0 +1,93 @@
+CI/CD QANDAY ULANDI
+===================
+
+Loyiha: https://github.com/satorovramazonbek/postgrestest
+Vosita: GitHub Actions (GitHub'ning o'zida bepul ishlaydigan CI/CD)
+
+
+1. CI/CD NIMA?
+--------------
+CI (Continuous Integration) - har safar kod GitHub'ga yuklanganda u avtomatik
+tekshiriladi: kutubxonalar o'rnatiladi, kod sifati ko'riladi, testlar ishlaydi.
+Xato bo'lsa GitHub darhol qizil belgi (X) ko'rsatadi.
+
+CD (Continuous Delivery) - testlar muvaffaqiyatli o'tsa, tayyor versiya
+avtomatik chiqariladi. Bu loyihada har yangi versiya GitHub "Releases"
+bo'limiga yuklanadi (v1.0.1, v1.0.2, ...).
+
+
+2. QO'SHILGAN FAYLLAR
+---------------------
+.github/workflows/ci-cd.yml  - CI/CD ning asosiy fayli. GitHub shu papkadagi
+                               .yml fayllarni o'qib, ishni bajaradi.
+test_aaa.py                  - aaa.py dagi funksiyalar uchun testlar (pytest).
+init.sql                     - test bazasida talabalar jadvalini yaratadi va
+                               3 ta namuna talaba qo'shadi.
+requirements.txt             - kerakli kutubxona: psycopg2-binary.
+CI_CD.txt                    - shu tushuntirish fayli.
+
+aaa.py ga kichik o'zgarish: host, port, baza nomi, foydalanuvchi va parol endi
+muhit o'zgaruvchilaridan (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD)
+olinadi. Ular berilmasa, avvalgidek localhost / postgrestest / postgres
+ishlatiladi, parol esa so'raladi. Shu sababli CI o'zining test bazasiga ulana
+oladi, sizning kompyuteringizda esa hammasi avvalgidek ishlaydi.
+
+
+3. CI/CD QACHON ISHLAYDI?
+-------------------------
+- main branch'ga har push qilinganda  -> test + release
+- main'ga pull request ochilganda     -> faqat test (release chiqmaydi)
+
+
+4. QADAMMA-QADAM NIMA BO'LADI
+-----------------------------
+"test" bosqichi (CI):
+  1) GitHub Ubuntu serverini ishga tushiradi.
+  2) Yoniga Docker'da PostgreSQL 18 bazasini ko'taradi (services: postgres).
+     Bu vaqtinchalik test bazasi, nomi postgrestest, paroli "postgres".
+     Ish tugagach u o'chib ketadi. Sizning haqiqiy bazangizga TEGILMAYDI.
+  3) Kodni yuklab oladi (actions/checkout).
+  4) Python 3.12 o'rnatadi (actions/setup-python).
+  5) pip install -r requirements.txt pytest flake8
+  6) flake8 - kod yozilish uslubini va xatolarni tekshiradi.
+  7) pytest - 5 ta test ishlaydi:
+       test_korish                  - talabalar ro'yxati chiqadimi
+       test_qoshish                 - yangi talaba qo'shiladimi (INSERT)
+       test_ozgartirish             - ball o'zgaradimi (UPDATE)
+       test_notogri_ustun_ozgarmaydi - noto'g'ri ustun nomi rad etiladimi
+       test_ochirish                - talaba o'chadimi (DELETE)
+     Har test oldidan init.sql jadvalni qaytadan yaratadi.
+
+"release" bosqichi (CD):
+  - Faqat "test" bosqichi muvaffaqiyatli o'tsa va bu main'ga push bo'lsa
+    ishlaydi (needs: test).
+  - GitHub'ning o'z tokeni (github.token) bilan yangi Release yaratadi va
+    unga aaa.py, init.sql, requirements.txt fayllarini biriktiradi.
+  - Hech qanday qo'shimcha parol yoki secret sozlash shart emas.
+
+
+5. NATIJANI QAYERDAN KO'RISH
+----------------------------
+- Repo -> "Actions" bo'limi: har bir ishga tushish va uning loglari.
+  Yashil belgi = hammasi yaxshi, qizil X = xato (ichiga kirib logni o'qing).
+- Repo -> "Releases" bo'limi: avtomatik chiqarilgan versiyalar.
+- Commit yonidagi yashil belgi yoki qizil X ham CI natijasini bildiradi.
+
+
+6. TESTLARNI O'Z KOMPYUTERINGIZDA ISHLATISH
+-------------------------------------------
+DIQQAT: testlar jadvalni init.sql bilan qaytadan yaratadi, shuning uchun
+ularni asl postgrestest bazasida EMAS, alohida bazada ishlating:
+
+  pip3 install pytest
+  createdb -h localhost -U postgres postgrestest_ci
+  DB_NAME=postgrestest_ci DB_PASSWORD='parolingiz' python3 -m pytest -v
+  dropdb -h localhost -U postgres postgrestest_ci
+
+
+7. YANGI O'ZGARISH QILGANDA
+--------------------------
+  git add .
+  git commit -m "nima o'zgardi"
+  git push
+Shundan keyin GitHub'dagi "Actions" bo'limida CI/CD o'zi ishga tushadi.

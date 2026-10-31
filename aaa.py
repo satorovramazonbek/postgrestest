@@ -5,10 +5,10 @@ import psycopg2
 
 # ====== Bazaga ulanish sozlamalari ======
 DB_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "dbname": "postgrestest",
-    "user": "postgres",
+    "host": os.environ.get("DB_HOST", "localhost"),
+    "port": int(os.environ.get("DB_PORT", 5432)),
+    "dbname": os.environ.get("DB_NAME", "postgrestest"),
+    "user": os.environ.get("DB_USER", "postgres"),
     # parol kodda saqlanmaydi: DB_PASSWORD o'zgaruvchisidan olinadi yoki so'raladi
     "password": os.environ.get("DB_PASSWORD") or getpass("Baza paroli: "),
 }
