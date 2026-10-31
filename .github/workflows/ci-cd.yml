@@ -1,69 +1,180 @@
+# Workflow (ish jarayoni) nomi - GitHub'dagi "Actions" bo'limida shu nom ko'rinadi
 name: CI/CD
 
+# "on" - workflow QACHON ishga tushishini belgilaydi
 on:
+  # push - kimdir GitHub'ga kod yuklaganda
   push:
+    # faqat "main" branch'ga push qilinganda (boshqa branch'larda ishlamaydi)
     branches: [main]
+  # pull_request - main'ga birlashtirish so'rovi (PR) ochilganda yoki yangilanganda
   pull_request:
+    # faqat main'ga qaratilgan PR'lar uchun
     branches: [main]
 
+# "jobs" - bajariladigan ishlar ro'yxati. Har bir job alohida serverda ishlaydi
 jobs:
   # ===== CI: har push va pull request'da kodni tekshiradi =====
+  # "test" - birinchi job'ning nomi (o'zimiz qo'ygan nom, istalgancha bo'lishi mumkin)
   test:
+    # Bu job GitHub beradigan bepul Ubuntu (Linux) serverida ishlaydi
     runs-on: ubuntu-latest
 
+    # "services" - job bilan birga yon tomonda ishlaydigan qo'shimcha dasturlar (Docker konteynerlar)
     services:
+      # "postgres" - servis nomi (o'zimiz qo'yganmiz)
       postgres:
+        # Docker Hub'dan PostgreSQL 18 versiyasining rasmiy image'ini oladi
         image: postgres:18
+        # Konteyner ichidagi muhit o'zgaruvchilari - bazani shu sozlamalar bilan yaratadi
         env:
+          # Bazadagi foydalanuvchi nomi
           POSTGRES_USER: postgres
+          # Shu foydalanuvchi paroli (bu vaqtinchalik test bazasi, haqiqiy parol EMAS)
           POSTGRES_PASSWORD: postgres
+          # Ishga tushganda avtomatik yaratiladigan baza nomi
           POSTGRES_DB: postgrestest
+        # Portlarni ulash: "serverdagi port : konteyner ichidagi port"
         ports:
+          # Shunda testlar localhost:5432 orqali bazaga ulana oladi
           - 5432:5432
+        # Docker'ga qo'shimcha sozlamalar ("> -" - bir necha qatorni bitta qatorga birlashtiradi)
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+        # Yuqoridagi 4 ta sozlama ma'nosi:
+        #   --health-cmd pg_isready  -> baza tayyormi, shu buyruq bilan tekshiriladi
+        #   --health-interval 5s     -> har 5 soniyada tekshiradi
+        #   --health-timeout 5s      -> bitta tekshiruv 5 soniyadan oshsa, muvaffaqiyatsiz hisoblanadi
+        #   --health-retries 10      -> 10 martagacha qayta urinadi
+        # Ya'ni baza to'liq ishga tushmaguncha testlar boshlanmaydi
 
+    # Job'dagi barcha qadamlar uchun umumiy muhit o'zgaruvchilari.
+    # aaa.py ulanish ma'lumotlarini aynan shu nomlar bilan os.environ'dan o'qiydi
     env:
+      # Baza manzili - yuqoridagi postgres konteyneri shu serverning o'zida
       DB_HOST: localhost
+      # Baza porti
       DB_PORT: 5432
+      # Ulanadigan baza nomi (POSTGRES_DB bilan bir xil)
       DB_NAME: postgrestest
+      # Foydalanuvchi (POSTGRES_USER bilan bir xil)
       DB_USER: postgres
+      # Parol (POSTGRES_PASSWORD bilan bir xil) - shuning uchun aaa.py parol so'ramaydi
       DB_PASSWORD: postgres
 
+    # "steps" - job ichida ketma-ket bajariladigan qadamlar
     steps:
+      # 1-qadam: repo'dagi kodni serverga yuklab oladi (busiz server bo'sh bo'ladi)
+      # "uses" - tayyor action'dan foydalanish; @v4 - uning versiyasi
       - uses: actions/checkout@v4
 
+      # 2-qadam: serverga Python o'rnatadi
       - uses: actions/setup-python@v5
+        # "with" - action'ga beriladigan parametrlar
         with:
+          # Qaysi Python versiyasi kerak (qo'shtirnoqda, aks holda 3.10 -> 3.1 bo'lib qolishi mumkin)
           python-version: "3.12"
 
+      # 3-qadam: "name" - qadam nomi, Actions loglarida shu nom ko'rinadi
       - name: Kutubxonalarni o'rnatish
+        # "run" - terminal buyrug'ini bajaradi:
+        # requirements.txt dagi psycopg2 + test uchun pytest + kod tekshiruvchi flake8
         run: pip install -r requirements.txt pytest flake8
 
+      # 4-qadam: kod sifatini tekshirish
       - name: Kod sifatini tekshirish (flake8)
+        # flake8 ikki faylni tekshiradi; qator uzunligi 140 belgigacha ruxsat.
+        # Xato topilsa, workflow shu yerda to'xtaydi (qizil X)
         run: flake8 aaa.py test_aaa.py --max-line-length 140
 
+      # 5-qadam: testlarni ishga tushirish
       - name: Testlar (pytest)
+        # pytest test_*.py fayllarni o'zi topib ishlatadi; -v har bir test natijasini batafsil chiqaradi
         run: pytest -v
 
   # ===== CD: testlar o'tsa, main'dagi har push uchun Release chiqaradi =====
+  # "release" - ikkinchi job nomi
   release:
+    # "needs: test" - faqat "test" job'i MUVAFFAQIYATLI tugagandan keyin ishlaydi
     needs: test
+    # Shart: bu push bo'lsin (PR emas) VA main branch'ga bo'lsin. Aks holda job o'tkazib yuboriladi
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Bu job ham alohida yangi Ubuntu serverida ishlaydi
     runs-on: ubuntu-latest
+    # Job'ga beriladigan ruxsatlar
     permissions:
+      # Repo'ga yozish ruxsati - Release yaratish uchun kerak (standart holatda faqat o'qish mumkin)
       contents: write
     steps:
+      # Kodni yuklab oladi (release'ga fayllarni biriktirish uchun kerak)
       - uses: actions/checkout@v4
 
       - name: GitHub Release yaratish
+        # Shu qadam uchun muhit o'zgaruvchisi
         env:
+          # GitHub har workflow uchun avtomatik beradigan token. "gh" buyrug'i u bilan GitHub'ga kiradi.
+          # ${{ ... }} - GitHub ifodasi, ishga tushganda haqiqiy qiymatga almashtiriladi
           GH_TOKEN: ${{ github.token }}
+        # "|" - bir necha qatorli buyruq yozish imkonini beradi
+        # gh release create - yangi Release yaratadi:
+        #   "v1.0.${{ github.run_number }}" - versiya tegi; run_number har ishga tushishda 1 ga oshadi (v1.0.1, v1.0.2...)
+        #   aaa.py init.sql requirements.txt - release'ga biriktiriladigan fayllar
+        #   --title - release sarlavhasi
+        #   --notes - release tavsifi; github.sha - shu commit'ning ID'si
+        #   "\" - buyruq keyingi qatorda davom etishini bildiradi
         run: |
           gh release create "v1.0.${{ github.run_number }}" \
             aaa.py init.sql requirements.txt \
             --title "v1.0.${{ github.run_number }}" \
             --notes "Avtomatik release: ${{ github.sha }}"
+
+  # ===== DEPLOY: Docker image yaratib, GitHub Container Registry (ghcr.io) ga yuklaydi =====
+  # "docker" - uchinchi job nomi
+  docker:
+    # Faqat testlar muvaffaqiyatli o'tgandan keyin ishlaydi (release bilan parallel)
+    needs: test
+    # Faqat main'ga push bo'lganda (PR'da image yuklanmaydi)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Ubuntu serverida ishlaydi (unda Docker oldindan o'rnatilgan)
+    runs-on: ubuntu-latest
+    # Job'ga beriladigan ruxsatlar
+    permissions:
+      # Kodni o'qish uchun
+      contents: read
+      # ghcr.io ga image (package) yuklash uchun
+      packages: write
+    steps:
+      # Kodni (Dockerfile, aaa.py, requirements.txt) serverga yuklab oladi
+      - uses: actions/checkout@v4
+
+      # ghcr.io ga kirish (login)
+      - name: GitHub Container Registry'ga kirish
+        # Tayyor action - "docker login" ni bajaradi
+        uses: docker/login-action@v3
+        with:
+          # Qaysi registry'ga kiriladi
+          registry: ghcr.io
+          # Foydalanuvchi nomi - workflow'ni ishga tushirgan odam (sizning GitHub login'ingiz)
+          username: ${{ github.actor }}
+          # Parol o'rniga GitHub avtomatik beradigan token - alohida secret kerak emas
+          password: ${{ github.token }}
+
+      # Image'ni Dockerfile asosida yaratib, ghcr.io ga yuklash
+      - name: Docker image yaratish va yuklash
+        # Tayyor action - "docker build" + "docker push" ni bajaradi
+        uses: docker/build-push-action@v6
+        with:
+          # Dockerfile va fayllar shu papkadan olinadi ("." - repo'ning ildizi)
+          context: .
+          # true - yaratilgan image registry'ga yuklanadi
+          push: true
+          # Image teglari (nomlari), har biri alohida qatorda:
+          #   latest - doim eng oxirgi versiya
+          #   v1.0.N - shu ishga tushishning raqami (release tegi bilan bir xil)
+          # Image nomi kichik harflarda bo'lishi shart
+          tags: |
+            ghcr.io/satorovramazonbek/postgrestest:latest
+            ghcr.io/satorovramazonbek/postgrestest:v1.0.${{ github.run_number }}

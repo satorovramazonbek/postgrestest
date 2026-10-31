@@ -66,12 +66,42 @@ oladi, sizning kompyuteringizda esa hammasi avvalgidek ishlaydi.
   - Hech qanday qo'shimcha parol yoki secret sozlash shart emas.
 
 
+"docker" bosqichi (DEPLOY):
+  - Bu ham faqat "test" o'tgandan keyin va main'ga push bo'lganda ishlaydi
+    (release bilan bir vaqtda, parallel).
+  - Dockerfile asosida Docker image yaratadi va uni GitHub Container Registry
+    (ghcr.io) ga yuklaydi. Ikki xil teg bilan:
+       ghcr.io/satorovramazonbek/postgrestest:latest   - doim eng oxirgi versiya
+       ghcr.io/satorovramazonbek/postgrestest:v1.0.N   - aniq versiya
+  - ghcr.io ga kirish uchun ham github.token ishlatiladi, secret kerak emas.
+
+  Qo'shilgan fayllar:
+    Dockerfile     - image qanday yig'ilishi: python:3.12-slim + psycopg2 + aaa.py.
+                     Ichida DB_HOST=host.docker.internal - bu konteyner ichidan
+                     sizning kompyuteringizdagi PostgreSQL'ga ulanish manzili.
+    .dockerignore  - image ichiga kirmasligi kerak bo'lgan fayllar (.git va h.k.)
+
+
 5. NATIJANI QAYERDAN KO'RISH
 ----------------------------
 - Repo -> "Actions" bo'limi: har bir ishga tushish va uning loglari.
   Yashil belgi = hammasi yaxshi, qizil X = xato (ichiga kirib logni o'qing).
 - Repo -> "Releases" bo'limi: avtomatik chiqarilgan versiyalar.
 - Commit yonidagi yashil belgi yoki qizil X ham CI natijasini bildiradi.
+- Repo bosh sahifasi o'ng tomonida "Packages" - yuklangan Docker image'lar.
+
+
+5.1 DOCKER IMAGE'NI ISHLATISH
+-----------------------------
+Docker Desktop ishlab turgan bo'lishi kerak. Har qanday kompyuterda:
+
+  docker pull ghcr.io/satorovramazonbek/postgrestest:latest
+  docker run --rm -it -e DB_PASSWORD='parolingiz' ghcr.io/satorovramazonbek/postgrestest:latest
+
+  -it          - menyuga klaviaturadan javob yozish uchun (busiz input() ishlamaydi)
+  --rm         - dastur tugagach konteyner o'chiriladi
+  -e NOM=QIYMAT - muhit o'zgaruvchisi; boshqa baza uchun -e DB_HOST=... -e DB_NAME=...
+                  qo'shish mumkin
 
 
 6. TESTLARNI O'Z KOMPYUTERINGIZDA ISHLATISH
